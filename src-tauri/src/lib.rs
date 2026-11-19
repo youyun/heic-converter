@@ -102,17 +102,12 @@ fn job_is_running(state: State<'_, Arc<AppState>>) -> bool {
 
 #[tauri::command]
 fn converter_info() -> serde_json::Value {
-    let heif_dec = std::process::Command::new("heif-dec")
-        .arg("-v")
-        .output()
-        .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .filter(|s| !s.is_empty());
-    serde_json::json!({
-        "heif_dec": heif_dec,
-        "sips": cfg!(target_os = "macos"),
-        "platform": std::env::consts::OS,
-    })
+    convert::converter_status()
+}
+
+#[tauri::command]
+fn path_is_dir(path: String) -> bool {
+    PathBuf::from(path).is_dir()
 }
 
 /// Dev/test hook: if `HEIC_CONVERTER_AUTO_FOLDER` is set, the UI opens it
@@ -138,6 +133,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+            let resource_dir = app.path().resource_dir().ok();
+            convert::init_resource_dir(resource_dir);
             let jobs = JobManager::open(&data_dir)?;
             app.manage(Arc::new(AppState {
                 scan: Mutex::new(Vec::new()),
@@ -156,6 +153,7 @@ pub fn run() {
             get_job,
             job_is_running,
             converter_info,
+            path_is_dir,
             auto_open_folder,
             auto_convert_flag,
         ])

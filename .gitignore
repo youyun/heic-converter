@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Bundled decoder binaries (populated by CI / local scripts; keep README)
+src-tauri/resources/heif/*
+!src-tauri/resources/heif/README.md
+
+# Rust / Tauri build output
+src-tauri/target

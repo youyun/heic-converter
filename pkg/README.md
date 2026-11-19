@@ -4,16 +4,16 @@ Installers are **not** committed to git. They are produced by GitHub Actions and
 
 | Artifact | Produced by | Notes |
 |----------|-------------|--------|
-| Windows `.msi` / NSIS `.exe` | `windows-latest` job in `.github/workflows/release.yml` | Prefer downloading from Releases |
-| macOS `.dmg` / `.app` | `macos-latest` jobs (arm64 + x86_64) | Same workflow |
+| Windows `.msi` / NSIS `.exe` | `windows-latest` job in `.github/workflows/release.yml` | libheif/HEVC linked into the binary — no PATH decoder |
+| macOS `.dmg` / `.app` | `macos-latest` jobs (arm64 + x86_64) | Uses system `sips` |
 
 ## Cut a release
 
 From a clean `main`:
 
 ```sh
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
 That triggers the Release workflow. When it finishes, open:
@@ -22,7 +22,7 @@ https://github.com/youyun/heic-converter/releases
 
 and download the Windows installer asset.
 
-You can also run the workflow manually (**Actions → Release → Run workflow**) and pass a tag like `v0.1.0`.
+You can also run the workflow manually (**Actions → Release → Run workflow**) and pass a tag like `v0.1.1`.
 
 ## Local packaging (optional)
 
@@ -30,7 +30,7 @@ You can also run the workflow manually (**Actions → Release → Run workflow**
 # macOS host
 npm run tauri build
 
-# Windows host (on a Win10/11 machine with MSVC + WebView2)
+# Windows host (MSVC + WebView2 + vcpkg libheif[hevc]:x64-windows-static-md)
 npm run tauri build
 ```
 

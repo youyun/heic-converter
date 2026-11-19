@@ -1,6 +1,6 @@
 [package]
 name = "heic-converter"
-version = "0.1.0"
+version = "0.1.1"
 description = "Bulk HEIC → JPG converter for macOS and Windows"
 authors = ["youyun"]
 edition = "2021"
@@ -24,6 +24,21 @@ parking_lot = "0.12"
 num_cpus = "1"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
+# Windows ships an in-process libheif (HEVC) via vcpkg static-md — no PATH / Store extras.
+[target.'cfg(windows)'.dependencies]
+libheif-rs = { version = "2.5", default-features = false, features = ["v1_17"] }
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
+
+# Ensure cargo-vcpkg / docs pick HEVC (libde265), not AVIF-only.
+[package.metadata.vcpkg]
+git = "https://github.com/microsoft/vcpkg"
+tag = "2026.07.29"
+dependencies = ["libheif[hevc]"]
+
+[package.metadata.vcpkg.target.x86_64-pc-windows-msvc]
+triplet = "x64-windows-static-md"
+dependencies = ["libheif[hevc]"]
 
 [profile.release]
 codegen-units = 1

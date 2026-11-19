@@ -132,6 +132,17 @@ button:disabled {
   position: relative;
 }
 
+.app.drag-active {
+  outline: 2px dashed var(--accent);
+  outline-offset: -6px;
+  border-radius: 12px;
+}
+
+.app.drag-active .file-viewport {
+  border-color: var(--accent);
+  background: #eef7f3;
+}
+
 .file-spacer {
   position: relative;
   width: 100%;

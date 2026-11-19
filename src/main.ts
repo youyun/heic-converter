@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open } from "@tauri-apps/plugin-dialog";
 
 type HeicEntry = {
@@ -175,7 +176,7 @@ async function renderVisible() {
   win.replaceChildren(frag);
 }
 
-async function loadFolder(path: string) {
+async function loadFolder(path: string, preselect?: string[]) {
   folderPath = path;
   entries.clear();
   selected.clear();
@@ -186,10 +187,58 @@ async function loadFolder(path: string) {
   const scan = await invoke<FolderScan>("scan_folder", { path, recursive });
   total = scan.total;
   scan.entries.forEach((e, i) => entries.set(i, e));
+  if (preselect && preselect.length > 0) {
+    const want = new Set(preselect.map(normalizePath));
+    for (const entry of entries.values()) {
+      if (want.has(normalizePath(entry.path))) selected.add(entry.path);
+    }
+  }
   el.totalCount().textContent = String(total);
   updateSelectionUi();
   await renderVisible();
   logLine(`Found ${total} HEIC/HEIF file(s).`);
+}
+
+function normalizePath(p: string): string {
+  return p.replace(/\\/g, "/").toLowerCase();
+}
+
+function isHeicPath(p: string): boolean {
+  return /\.(heic|heif|hif)$/i.test(p);
+}
+
+function parentDir(p: string): string {
+  const norm = p.replace(/\\/g, "/");
+  const idx = norm.lastIndexOf("/");
+  return idx <= 0 ? p : p.slice(0, idx);
+}
+
+async function handleDroppedPaths(paths: string[]) {
+  if (!paths.length) return;
+  const first = paths[0];
+
+  // Directory drop → open that folder.
+  if (paths.length === 1 && (await invoke<boolean>("path_is_dir", { path: first }))) {
+    await loadFolder(first);
+    return;
+  }
+
+  const heics = paths.filter(isHeicPath);
+  if (heics.length === 0) {
+    logLine("Drop a HEIC/HEIF photo (or a folder) to open it.");
+    return;
+  }
+
+  const parent = parentDir(heics[0]);
+  const openFolder = window.confirm(
+    `Open the parent folder?\n\n${parent}\n\nOK — browse / multi-select / bulk convert from that folder.\nCancel — select only the dropped photo(s).`,
+  );
+
+  if (openFolder) {
+    await loadFolder(parent);
+  } else {
+    await loadFolder(parent, heics);
+  }
 }
 
 /** Native folder dialog via the JS plugin (non-blocking). Never use a Rust blocking_pick_* command. */
@@ -294,13 +343,34 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
 
   try {
+    const unlisten = await getCurrentWebview().onDragDropEvent((event) => {
+      const appRoot = document.querySelector(".app");
+      if (event.payload.type === "enter" || event.payload.type === "over") {
+        appRoot?.classList.add("drag-active");
+        return;
+      }
+      appRoot?.classList.remove("drag-active");
+      if (event.payload.type === "drop") {
+        void handleDroppedPaths(event.payload.paths).catch(showErr);
+      }
+    });
+    window.addEventListener("unload", () => unlisten());
+  } catch {
+    /* webview drag-drop unavailable outside Tauri */
+  }
+
+  try {
     const info = await invoke<{
       heif_dec: string | null;
+      bundled_heif_dec: string | null;
+      libheif: boolean;
       sips: boolean;
       platform: string;
     }>("converter_info");
     const bits = [info.platform];
-    if (info.heif_dec) bits.push("heif-dec");
+    if (info.libheif) bits.push("libheif (built-in)");
+    if (info.bundled_heif_dec) bits.push("bundled heif-dec");
+    else if (info.heif_dec) bits.push("heif-dec");
     if (info.sips) bits.push("sips");
     el.info().textContent = bits.join(" · ");
   } catch {

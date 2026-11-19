@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to create/publish (e.g. v0.1.0). Leave empty to build artifacts only without a Release."
+        description: "Release tag to create/publish (e.g. v0.1.1). Leave empty to build artifacts only without a Release."
         required: false
         default: ""
 
@@ -52,9 +52,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Install libheif (macOS — provides heif-dec for local smoke)
-        if: matrix.platform == 'macos-latest'
-        run: brew install libheif
+      # macOS convert uses Apple sips (no Homebrew needed at runtime).
+      # Optional brew libheif is only useful for local PATH heif-dec smoke — skip in CI.
+
+      - name: Install libheif via vcpkg (Windows, static HEVC)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $Vcpkg = $env:VCPKG_INSTALLATION_ROOT
+          if (-not $Vcpkg) { throw "VCPKG_INSTALLATION_ROOT not set on runner" }
+          # Static libs + dynamic CRT (/MD) — matches Rust MSVC and embeds decode into the exe.
+          & "$Vcpkg\vcpkg.exe" install "libheif[hevc]:x64-windows-static-md" --clean-after-build
+          "VCPKG_ROOT=$Vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "VCPKGRS_TRIPLET=x64-windows-static-md" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Install frontend deps
         run: npm ci
@@ -63,17 +73,19 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # VCPKG_ROOT / VCPKGRS_TRIPLET come from the Windows step via GITHUB_ENV.
         with:
           # Empty tagName → build only (workflow_dispatch without tag).
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || '' }}
           releaseName: "HEIC Converter ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || '' }}"
           releaseBody: |
-            HEIC Converter installers.
+            HEIC Converter installers (decoder bundled — no PATH setup).
 
-            **Windows:** download the `.msi` or NSIS `.exe` asset below.
-            Runtime note: install [libheif](https://github.com/strukturag/libheif) so `heif-dec` is on PATH (or use Microsoft HEIF Image Extensions if you change decoders later).
+            **Windows:** download the `.msi` or NSIS `.exe`. HEIC decode is **built into the app** (libheif + libde265 via vcpkg) — no Homebrew, no Microsoft Store HEIF extensions required.
 
-            **macOS:** download the `.dmg` for your CPU (Apple Silicon vs Intel).
+            **macOS:** download the `.dmg` for your CPU (Apple Silicon vs Intel). Conversion uses built-in Apple `sips` (ImageIO) — no Homebrew.
+
+            **Drag-and-drop:** drop a HEIC onto the window; the app asks whether to open the parent folder for bulk select/convert.
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}

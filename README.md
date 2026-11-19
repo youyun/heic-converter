@@ -4,33 +4,44 @@ Bulk **HEIC → JPG** desktop app for **macOS** and **Windows 10**, built with [
 
 ## Features (MVP)
 
-- Pick a folder, multi-select HEIC/HEIF files (virtualized list; pages load on scroll)
+- Pick a folder, or **drag-and-drop** a HEIC onto the window (offers to open the parent folder for multi-select / bulk convert)
+- Multi-select HEIC/HEIF files (virtualized list; pages load on scroll)
 - Convert with live progress; jobs persist in SQLite and resume after crash/quit (skips done, retries failed)
 - Optional destination folder (default: write JPG beside each HEIC)
 - Optional delete of the original HEIC **only after** a successful JPG write
 - Bounded worker pool (up to 4 threads); one image at a time per worker
 
-## Requirements
+## Decoder (no PATH setup)
+
+Shipped installs convert **without** installing Homebrew, vcpkg, or Microsoft Store HEIF extensions:
+
+| Platform | Built-in decoder |
+|----------|------------------|
+| **Windows** | In-process **libheif** + **libde265** (HEVC), statically linked at build time via vcpkg |
+| **macOS** | Apple **`sips`** (ImageIO) — already on every Mac |
+
+Optional extras (dev machines only):
+
+- `heif-dec` on `PATH` (e.g. `brew install libheif`)
+- A portable `heif-dec` dropped into `src-tauri/resources/heif/` (sidecar; see that folder’s README)
+
+## Requirements (development)
 
 ### macOS
 
 - Xcode CLT / Xcode
 - Rust (`rustup`)
 - Node.js 18+
-- A HEIC decoder on `PATH`:
-  - **Preferred:** [libheif](https://github.com/strukturag/libheif) → `brew install libheif` (provides `heif-dec`)
-  - **Fallback:** Apple `sips` (built-in)
 
 ### Windows 10
 
 - [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) (usually already present)
 - Rust + Node.js
 - Visual Studio Build Tools (MSVC) for Tauri
-- A HEIC decoder on `PATH`:
-  - Install libheif (e.g. via [vcpkg](https://vcpkg.io/) / Chocolatey / scoop) so `heif-dec` is available, **or**
-  - Install Microsoft’s **HEIF Image Extensions** / **HEVC Video Extensions** if you later switch the converter to WIC
+- [vcpkg](https://vcpkg.io/) with `libheif[hevc]:x64-windows-static-md` for linking the built-in decoder  
+  (`VCPKG_ROOT` + `VCPKGRS_TRIPLET=x64-windows-static-md`)
 
-> Windows conversion is structured the same as macOS (`heif-dec` first). Full UI packaging on Win10 was not verified on this Mac.
+End users who install from GitHub Releases need **only** WebView2 — the decoder is inside the app.
 
 ## Develop
 
@@ -58,16 +69,23 @@ npm run tauri dev
 
 Opens the folder without a dialog; with `AUTO_CONVERT=1` also selects all and starts a job.
 
+Force the macOS `sips` path (ignore PATH `heif-dec`):
+
+```sh
+HEIC_CONVERTER_FORCE_SIPS=1 cargo test --lib convert::tests::sample_heic_converts_via_sips_without_heif_dec -- --nocapture
+```
+
 ## Windows installer (GitHub Releases)
 
 Installers are built by CI (`.github/workflows/release.yml`) on `windows-latest` and attached to a Release — not stored in git.
 
-1. Tag and push: `git tag v0.1.0 && git push origin v0.1.0`
+1. Tag and push: `git tag v0.1.1 && git push origin v0.1.1`
 2. Wait for the **Release** workflow on the Actions tab
 3. Open https://github.com/youyun/heic-converter/releases
 4. Download the Windows `.msi` or NSIS `.exe`
+5. Install → open a folder (or drop a HEIC) → Convert — **no** libheif PATH step
 
-Or: **Actions → Release → Run workflow** and pass tag `v0.1.0`.
+Or: **Actions → Release → Run workflow** and pass tag `v0.1.1`.
 
 See also [`pkg/README.md`](pkg/README.md).
 
@@ -77,7 +95,7 @@ With sample HEICs present:
 
 ```sh
 cd src-tauri
-cargo test --lib convert::tests::sample_heic_converts -- --nocapture
+cargo test --lib -- --nocapture
 ```
 
 ## Job store
