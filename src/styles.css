@@ -147,6 +147,36 @@ h1 {
   text-align: right;
 }
 
+.update-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: 280px;
+}
+
+.update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.update-version,
+.update-status {
+  line-height: 1.35;
+}
+
+#btn-check-update {
+  font-size: 12px;
+  padding: 5px 10px;
+}
+
+#btn-install-update {
+  font-size: 12px;
+  padding: 5px 10px;
+}
+
 .toolbar,
 .options,
 .list-header,
@@ -385,5 +415,14 @@ button:disabled {
 
   .meta {
     text-align: left;
+  }
+
+  .update-panel {
+    align-items: stretch;
+    max-width: none;
+  }
+
+  .update-actions {
+    justify-content: flex-start;
   }
 }

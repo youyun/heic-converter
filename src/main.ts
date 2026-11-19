@@ -1,7 +1,10 @@
+import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open } from "@tauri-apps/plugin-dialog";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { check, type Update } from "@tauri-apps/plugin-updater";
 import {
   applyStaticI18n,
   detectInitialLocale,
@@ -74,6 +77,9 @@ let lastProgress: {
   total: number;
   status: string;
 } | null = null;
+let appVersion = "—";
+let pendingUpdate: Update | null = null;
+let updateBusy = false;
 
 const el = {
   pick: () => document.getElementById("btn-pick") as HTMLButtonElement,
@@ -101,6 +107,12 @@ const el = {
     document.getElementById("locale-select") as HTMLSelectElement,
   themeSelect: () =>
     document.getElementById("theme-select") as HTMLSelectElement,
+  appVersion: () => document.getElementById("app-version") as HTMLElement,
+  checkUpdate: () =>
+    document.getElementById("btn-check-update") as HTMLButtonElement,
+  installUpdate: () =>
+    document.getElementById("btn-install-update") as HTMLButtonElement,
+  updateStatus: () => document.getElementById("update-status") as HTMLElement,
   confirmBackdrop: () =>
     document.getElementById("confirm-backdrop") as HTMLElement,
   confirmSummary: () =>
@@ -231,12 +243,29 @@ function syncFolderLabel() {
   }
 }
 
+function setUpdateStatus(text: string) {
+  el.updateStatus().textContent = text;
+}
+
+function syncUpdateUi() {
+  el.appVersion().textContent = t("update.version", { version: appVersion });
+  el.installUpdate().hidden = !pendingUpdate;
+  el.checkUpdate().disabled = updateBusy;
+  el.installUpdate().disabled = updateBusy || !pendingUpdate;
+}
+
 function refreshLocalizedChrome() {
   applyStaticI18n();
   el.localeSelect().value = getLocale();
   el.themeSelect().value = getThemePref();
   syncFolderLabel();
   syncToolbarDestLabel();
+  syncUpdateUi();
+  if (!pendingUpdate && !updateBusy) {
+    setUpdateStatus(t("update.idle"));
+  } else if (pendingUpdate && !updateBusy) {
+    setUpdateStatus(t("update.available", { version: pendingUpdate.version }));
+  }
   if (!el.confirmBackdrop().hidden) {
     const n = selected.size;
     const folder =
@@ -257,6 +286,66 @@ function refreshLocalizedChrome() {
   } else if (!currentJobId) {
     el.jobStatus().textContent = t("job.idle");
     if (!currentJobName) el.jobName().textContent = t("job.emDash");
+  }
+}
+
+async function checkForUpdates() {
+  if (updateBusy) return;
+  updateBusy = true;
+  pendingUpdate = null;
+  syncUpdateUi();
+  setUpdateStatus(t("update.checking"));
+  try {
+    const update = await check();
+    if (!update) {
+      setUpdateStatus(t("update.upToDate", { version: appVersion }));
+      return;
+    }
+    pendingUpdate = update;
+    setUpdateStatus(t("update.available", { version: update.version }));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    setUpdateStatus(t("update.error", { msg }));
+    logLine(t("update.error", { msg }));
+  } finally {
+    updateBusy = false;
+    syncUpdateUi();
+  }
+}
+
+async function installPendingUpdate() {
+  if (!pendingUpdate || updateBusy) return;
+  const version = pendingUpdate.version;
+  if (!window.confirm(t("update.confirmInstall", { version }))) return;
+
+  updateBusy = true;
+  syncUpdateUi();
+  let downloaded = 0;
+  let contentLength: number | undefined;
+  try {
+    await pendingUpdate.downloadAndInstall((event) => {
+      if (event.event === "Started") {
+        contentLength = event.data.contentLength;
+        setUpdateStatus(t("update.downloading", { pct: 0 }));
+      } else if (event.event === "Progress") {
+        downloaded += event.data.chunkLength;
+        const pct =
+          contentLength && contentLength > 0
+            ? Math.min(99, Math.round((downloaded / contentLength) * 100))
+            : 0;
+        setUpdateStatus(t("update.downloading", { pct }));
+      } else if (event.event === "Finished") {
+        setUpdateStatus(t("update.installing"));
+      }
+    });
+    setUpdateStatus(t("update.installing"));
+    await relaunch();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    setUpdateStatus(t("update.error", { msg }));
+    logLine(t("update.error", { msg }));
+    updateBusy = false;
+    syncUpdateUi();
   }
 }
 
@@ -543,6 +632,12 @@ window.addEventListener("DOMContentLoaded", async () => {
   el.themeSelect().addEventListener("change", () => {
     setThemePref(el.themeSelect().value as ThemePref);
   });
+  el.checkUpdate().addEventListener("click", () => {
+    void checkForUpdates();
+  });
+  el.installUpdate().addEventListener("click", () => {
+    void installPendingUpdate();
+  });
 
   el.pick().addEventListener("click", () => void pickFolder().catch(showErr));
   el.destBtn().addEventListener("click", () => void pickDest().catch(showErr));
@@ -642,6 +737,14 @@ window.addEventListener("DOMContentLoaded", async () => {
   } catch {
     /* webview drag-drop unavailable outside Tauri */
   }
+
+  try {
+    appVersion = await getVersion();
+  } catch {
+    appVersion = "—";
+  }
+  syncUpdateUi();
+  setUpdateStatus(t("update.idle"));
 
   try {
     const info = await invoke<{

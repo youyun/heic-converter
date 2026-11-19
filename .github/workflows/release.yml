@@ -1,7 +1,13 @@
 name: Release
 
 # Builds installers via Tauri on GitHub-hosted runners and attaches them
-# to a GitHub Release. Prefer Releases over committing large binaries.
+# to a GitHub Release (including updater signatures + latest.json).
+# Prefer Releases over committing large binaries.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   TAURI_SIGNING_PRIVATE_KEY
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+# Public key lives in src-tauri/tauri.conf.json (plugins.updater.pubkey).
 
 on:
   push:
@@ -10,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to create/publish (e.g. v0.1.1). Leave empty to build artifacts only without a Release."
+        description: "Release tag to create/publish (e.g. v0.2.1). Leave empty to build artifacts only without a Release."
         required: false
         default: ""
 
@@ -69,10 +75,28 @@ jobs:
       - name: Install frontend deps
         run: npm ci
 
+      - name: Require updater signing secrets for tagged releases
+        if: github.ref_type == 'tag' || inputs.tag != ''
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::Missing secret TAURI_SIGNING_PRIVATE_KEY. Add it under Settings → Secrets and variables → Actions, then re-run this workflow."
+            exit 1
+          fi
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" ]; then
+            echo "::error::Missing secret TAURI_SIGNING_PRIVATE_KEY_PASSWORD. Add it under Settings → Secrets and variables → Actions, then re-run this workflow."
+            exit 1
+          fi
+
       - name: Build Tauri (upload to Release when a tag is set)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # VCPKG_ROOT / VCPKGRS_TRIPLET come from the Windows step via GITHUB_ENV.
         with:
           # Empty tagName → build only (workflow_dispatch without tag).
@@ -85,9 +109,12 @@ jobs:
 
             **macOS:** download the `.dmg` for your CPU (Apple Silicon vs Intel). Conversion uses built-in Apple `sips` (ImageIO) — no Homebrew.
 
+            **In-app updates:** from v0.2.1, use **Check for updates** in the header. Releases publish signed updater artifacts and `latest.json`.
+
             **Drag-and-drop:** drop a HEIC onto the window; the app asks whether to open the parent folder for bulk select/convert.
 
             **Convert confirm:** after Convert, re-confirm delete-originals and custom destination before the job starts.
           releaseDraft: false
           prerelease: false
+          # Defaults: uploadUpdaterJson=true, uploadUpdaterSignatures=true
           args: ${{ matrix.args }}

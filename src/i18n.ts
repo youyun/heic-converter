@@ -61,6 +61,18 @@ const en: Dict = {
   "theme.label": "Theme",
   "lang.label": "Language",
   "privacy.localOnly": "Files stay on this device — no upload.",
+  "update.check": "Check for updates",
+  "update.version": "Version {version}",
+  "update.idle": "Updates are signed via GitHub Releases.",
+  "update.checking": "Checking for updates…",
+  "update.upToDate": "You’re up to date ({version}).",
+  "update.available": "Update available: {version}",
+  "update.downloading": "Downloading update… {pct}%",
+  "update.installing": "Installing update…",
+  "update.installRestart": "Install and restart",
+  "update.confirmInstall":
+    "Download and install version {version} now?\nThe app will restart when finished.",
+  "update.error": "Update check failed: {msg}",
 };
 
 const zh: Dict = {
@@ -115,6 +127,18 @@ const zh: Dict = {
   "theme.label": "主题",
   "lang.label": "语言",
   "privacy.localOnly": "仅在本机处理，不会上传。",
+  "update.check": "检查更新",
+  "update.version": "版本 {version}",
+  "update.idle": "更新通过 GitHub Releases 签名分发。",
+  "update.checking": "正在检查更新…",
+  "update.upToDate": "已是最新版本（{version}）。",
+  "update.available": "发现新版本：{version}",
+  "update.downloading": "正在下载更新… {pct}%",
+  "update.installing": "正在安装更新…",
+  "update.installRestart": "安装并重启",
+  "update.confirmInstall":
+    "现在下载并安装 {version}？\n完成后应用会自动重启。",
+  "update.error": "检查更新失败：{msg}",
 };
 
 const catalogs: Record<Locale, Dict> = { en, zh };

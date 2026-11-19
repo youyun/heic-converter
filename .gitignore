@@ -29,3 +29,7 @@ src-tauri/resources/heif/*
 
 # Rust / Tauri build output
 src-tauri/target
+
+# Never commit Tauri updater private keys (public key lives in tauri.conf.json)
+*.key
+TAURI_SIGNING_PRIVATE_KEY*
