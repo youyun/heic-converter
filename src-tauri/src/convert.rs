@@ -39,15 +39,19 @@ pub fn is_heic_path(path: &Path) -> bool {
 }
 
 pub fn default_jpg_path(heic: &Path, dest_dir: Option<&Path>) -> PathBuf {
-    let file_stem = heic.file_stem().unwrap_or_default();
-    let mut name = PathBuf::from(file_stem);
-    name.set_extension("jpg");
+    // Append ".jpg" as a string — do NOT use Path::set_extension on the stem.
+    // Stems like "IMG.2024.01.02" would treat ".02" as an extension and truncate.
+    let stem = heic
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "output".into());
+    let name = format!("{stem}.jpg");
     match dest_dir {
-        Some(dir) => dir.join(name),
+        Some(dir) => dir.join(&name),
         None => heic
             .parent()
             .unwrap_or_else(|| Path::new("."))
-            .join(name),
+            .join(&name),
     }
 }
 
@@ -155,6 +159,18 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
+    fn multi_dot_stem_keeps_full_name() {
+        let heic = PathBuf::from("/tmp/2026-11-08 09.15.22.heic");
+        let out = default_jpg_path(&heic, None);
+        assert_eq!(
+            out.file_name().unwrap().to_string_lossy(),
+            "2026-11-08 09.15.22.jpg"
+        );
+        let out2 = default_jpg_path(&heic, Some(Path::new("/out")));
+        assert_eq!(out2, PathBuf::from("/out/2026-11-08 09.15.22.jpg"));
+    }
+
+    #[test]
     fn sample_heic_converts() {
         let src = PathBuf::from("/Users/yuanda/Downloads/heic-samples/2026-11-08 09.15.22.heic");
         if !src.exists() {
@@ -163,7 +179,12 @@ mod tests {
         }
         let dir = std::env::temp_dir().join("heic-converter-test");
         let _ = fs::create_dir_all(&dir);
-        let dest = dir.join("sample.jpg");
+        let dest = default_jpg_path(&src, Some(&dir));
+        assert!(dest
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .ends_with("09.15.22.jpg"));
         let _ = fs::remove_file(&dest);
         convert_heic_to_jpg(&src, &dest).expect("convert");
         assert!(dest.is_file());

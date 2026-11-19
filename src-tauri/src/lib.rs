@@ -18,33 +18,33 @@ struct AppState {
     jobs: JobManager,
 }
 
-#[tauri::command]
-fn pick_folder(app: AppHandle) -> Result<Option<String>, String> {
-    use tauri_plugin_dialog::DialogExt;
-    let path = app.dialog().file().blocking_pick_folder();
-    Ok(path.map(|p| match p {
-        tauri_plugin_dialog::FilePath::Path(pb) => pb.to_string_lossy().into_owned(),
-        other => other.to_string(),
-    }))
-}
+/// Folder picking is done from the frontend via `@tauri-apps/plugin-dialog`.
+/// Do **not** call `blocking_pick_*` from a Tauri command — on macOS that
+/// deadlocks the main run loop (dialog needs the UI thread that is blocked
+/// waiting for the dialog).
 
 #[tauri::command]
-fn scan_folder(
+async fn scan_folder(
     state: State<'_, Arc<AppState>>,
     path: String,
     recursive: bool,
 ) -> Result<FolderScan, String> {
-    let root = PathBuf::from(&path);
-    let entries = scan_heic_files(&root, recursive)?;
-    let total = entries.len();
-    *state.scan.lock() = entries;
-    *state.scan_root.lock() = Some(path.clone());
-    let page = page_entries(&state.scan.lock(), 0, 200);
-    Ok(FolderScan {
-        root: path,
-        total,
-        entries: page.entries,
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let root = PathBuf::from(&path);
+        let entries = scan_heic_files(&root, recursive)?;
+        let total = entries.len();
+        let first_page = page_entries(&entries, 0, 200).entries;
+        *state.scan.lock() = entries;
+        *state.scan_root.lock() = Some(path.clone());
+        Ok(FolderScan {
+            root: path,
+            total,
+            entries: first_page,
+        })
     })
+    .await
+    .map_err(|e| format!("scan task join: {e}"))?
 }
 
 #[tauri::command]
@@ -71,7 +71,11 @@ fn create_convert_job(
 }
 
 #[tauri::command]
-fn start_convert_job(app: AppHandle, state: State<'_, Arc<AppState>>, job_id: String) -> Result<(), String> {
+fn start_convert_job(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+    job_id: String,
+) -> Result<(), String> {
     state.jobs.start_job(app, job_id)
 }
 
@@ -111,16 +115,29 @@ fn converter_info() -> serde_json::Value {
     })
 }
 
+/// Dev/test hook: if `HEIC_CONVERTER_AUTO_FOLDER` is set, the UI opens it
+/// without a native dialog (smoke tests / automation).
+#[tauri::command]
+fn auto_open_folder() -> Option<String> {
+    std::env::var("HEIC_CONVERTER_AUTO_FOLDER")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// When `"1"`, UI selects all and starts convert after auto-open.
+#[tauri::command]
+fn auto_convert_flag() -> String {
+    std::env::var("HEIC_CONVERTER_AUTO_CONVERT").unwrap_or_default()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let data_dir = app
-                .path()
-                .app_data_dir()
-                .map_err(|e| e.to_string())?;
+            let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
             let jobs = JobManager::open(&data_dir)?;
             app.manage(Arc::new(AppState {
                 scan: Mutex::new(Vec::new()),
@@ -130,7 +147,6 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            pick_folder,
             scan_folder,
             list_heic_page,
             create_convert_job,
@@ -140,6 +156,8 @@ pub fn run() {
             get_job,
             job_is_running,
             converter_info,
+            auto_open_folder,
+            auto_convert_flag,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-dialog";
 
 type HeicEntry = {
   path: string;
@@ -191,13 +192,23 @@ async function loadFolder(path: string) {
   logLine(`Found ${total} HEIC/HEIF file(s).`);
 }
 
+/** Native folder dialog via the JS plugin (non-blocking). Never use a Rust blocking_pick_* command. */
+async function pickDirectory(): Promise<string | null> {
+  // With directory:true + multiple:false this resolves to string | null.
+  return await open({
+    directory: true,
+    multiple: false,
+    title: "Choose folder",
+  });
+}
+
 async function pickFolder() {
-  const path = await invoke<string | null>("pick_folder");
+  const path = await pickDirectory();
   if (path) await loadFolder(path);
 }
 
 async function pickDest() {
-  const path = await invoke<string | null>("pick_folder");
+  const path = await pickDirectory();
   if (!path) return;
   destPath = path;
   el.destLabel().textContent = path;
@@ -294,6 +305,21 @@ window.addEventListener("DOMContentLoaded", async () => {
     el.info().textContent = bits.join(" · ");
   } catch {
     /* ignore */
+  }
+
+  try {
+    const auto = await invoke<string | null>("auto_open_folder");
+    if (auto) {
+      logLine(`Auto-opening ${auto}`);
+      await loadFolder(auto);
+      const flag = await invoke<string>("auto_convert_flag");
+      if (flag.trim() === "1") {
+        await selectAllVisible(true);
+        await startConvert();
+      }
+    }
+  } catch (err) {
+    showErr(err);
   }
 });
 
