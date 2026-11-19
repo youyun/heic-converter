@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HEIC Converter</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <div>
+          <h1>HEIC → JPG</h1>
+          <p class="sub">Bulk convert with resumable jobs</p>
+        </div>
+        <div id="converter-info" class="meta"></div>
+      </header>
+
+      <section class="toolbar">
+        <button id="btn-pick" type="button">Choose folder</button>
+        <label class="check">
+          <input id="opt-recursive" type="checkbox" />
+          Include subfolders
+        </label>
+        <span id="folder-label" class="folder-label">No folder selected</span>
+      </section>
+
+      <section class="options">
+        <label class="check">
+          <input id="opt-dest" type="checkbox" />
+          Custom destination folder
+        </label>
+        <button id="btn-dest" type="button" disabled>Pick destination…</button>
+        <span id="dest-label" class="folder-label">Default: JPG beside each HEIC</span>
+        <label class="check">
+          <input id="opt-delete" type="checkbox" />
+          Delete original HEIC after successful convert
+        </label>
+      </section>
+
+      <section class="list-header">
+        <label class="check">
+          <input id="select-all" type="checkbox" />
+          Select all (<span id="total-count">0</span>)
+        </label>
+        <span id="selected-count">0 selected</span>
+        <button id="btn-convert" type="button" disabled>Convert</button>
+        <button id="btn-cancel" type="button" disabled>Cancel</button>
+      </section>
+
+      <div id="file-viewport" class="file-viewport" tabindex="0">
+        <div id="file-spacer" class="file-spacer">
+          <div id="file-window" class="file-window"></div>
+        </div>
+      </div>
+
+      <section class="status-panel">
+        <div class="status-row">
+          <strong>Job</strong>
+          <span id="job-id">—</span>
+        </div>
+        <div class="progress-bar">
+          <div id="progress-fill" class="progress-fill"></div>
+        </div>
+        <div id="job-status" class="job-status">Idle</div>
+        <div id="job-log" class="job-log"></div>
+      </section>
+    </div>
+  </body>
+</html>
