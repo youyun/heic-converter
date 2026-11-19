@@ -1,6 +1,6 @@
 [package]
 name = "heic-converter"
-version = "0.1.1"
+version = "0.1.2"
 description = "Bulk HEIC → JPG converter for macOS and Windows"
 authors = ["youyun"]
 edition = "2021"

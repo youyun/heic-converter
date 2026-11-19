@@ -45,11 +45,13 @@ const PAGE_SIZE = 200;
 
 let folderPath: string | null = null;
 let destPath: string | null = null;
+let confirmDestPath: string | null = null;
 let total = 0;
 /** Sparse cache of loaded pages: index → entry */
 const entries = new Map<number, HeicEntry>();
 const selected = new Set<string>();
 let currentJobId: string | null = null;
+let currentJobName: string | null = null;
 let loadingPages = new Set<number>();
 
 const el = {
@@ -68,17 +70,60 @@ const el = {
   viewport: () => document.getElementById("file-viewport") as HTMLElement,
   spacer: () => document.getElementById("file-spacer") as HTMLElement,
   window: () => document.getElementById("file-window") as HTMLElement,
+  jobName: () => document.getElementById("job-name") as HTMLElement,
   jobId: () => document.getElementById("job-id") as HTMLElement,
   jobStatus: () => document.getElementById("job-status") as HTMLElement,
   progress: () => document.getElementById("progress-fill") as HTMLElement,
   log: () => document.getElementById("job-log") as HTMLElement,
   info: () => document.getElementById("converter-info") as HTMLElement,
+  confirmBackdrop: () =>
+    document.getElementById("confirm-backdrop") as HTMLElement,
+  confirmSummary: () =>
+    document.getElementById("confirm-summary") as HTMLElement,
+  confirmDelete: () =>
+    document.getElementById("confirm-delete") as HTMLInputElement,
+  confirmDest: () =>
+    document.getElementById("confirm-dest") as HTMLInputElement,
+  confirmDestPick: () =>
+    document.getElementById("confirm-dest-pick") as HTMLButtonElement,
+  confirmDestClear: () =>
+    document.getElementById("confirm-dest-clear") as HTMLButtonElement,
+  confirmDestLabel: () =>
+    document.getElementById("confirm-dest-label") as HTMLElement,
+  confirmCancel: () =>
+    document.getElementById("confirm-cancel") as HTMLButtonElement,
+  confirmOk: () => document.getElementById("confirm-ok") as HTMLButtonElement,
 };
 
 function formatSize(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function folderBaseName(path: string | null): string | null {
+  if (!path) return null;
+  const norm = path.replace(/\\/g, "/").replace(/\/+$/, "");
+  const idx = norm.lastIndexOf("/");
+  const base = idx >= 0 ? norm.slice(idx + 1) : norm;
+  return base || null;
+}
+
+function formatJobTime(d = new Date()): string {
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/** Human-readable job title; UUID stays secondary. */
+function makeJobName(fileCount: number): string {
+  const folder = folderBaseName(folderPath);
+  const when = formatJobTime();
+  if (folder) return `${folder} · ${when}`;
+  return `Convert ${fileCount} file${fileCount === 1 ? "" : "s"} · ${when}`;
 }
 
 function logLine(msg: string) {
@@ -98,8 +143,60 @@ function setProgress(done: number, failed: number, totalCount: number, status: s
   const finished = done + failed;
   const pct = totalCount > 0 ? Math.round((finished / totalCount) * 100) : 0;
   el.progress().style.width = `${pct}%`;
+  const failBit = failed > 0 ? ` · ${failed} failed` : "";
   el.jobStatus().textContent =
-    `${status} — ${done} done, ${failed} failed / ${totalCount} (${pct}%)`;
+    `${status} — ${finished}/${totalCount} completed (${pct}%)${failBit}`;
+}
+
+function setJobLabel(name: string, id: string) {
+  currentJobName = name;
+  el.jobName().textContent = name;
+  el.jobId().textContent = id.slice(0, 8);
+  el.jobId().title = id;
+  el.jobId().hidden = false;
+}
+
+function syncToolbarDestLabel() {
+  if (el.optDest().checked && destPath) {
+    el.destLabel().textContent = destPath;
+    el.destLabel().title = destPath;
+  } else {
+    el.destLabel().textContent = "Default: JPG beside each HEIC";
+    el.destLabel().title = "";
+  }
+}
+
+function syncConfirmDestUi() {
+  const useDest = el.confirmDest().checked;
+  el.confirmDestPick().disabled = !useDest;
+  el.confirmDestClear().disabled = !useDest || !confirmDestPath;
+  if (useDest && confirmDestPath) {
+    el.confirmDestLabel().textContent = confirmDestPath;
+    el.confirmDestLabel().title = confirmDestPath;
+  } else if (useDest) {
+    el.confirmDestLabel().textContent = "No destination selected yet";
+    el.confirmDestLabel().title = "";
+  } else {
+    el.confirmDestLabel().textContent = "Default: JPG beside each HEIC";
+    el.confirmDestLabel().title = "";
+  }
+}
+
+function openConfirmDialog() {
+  const n = selected.size;
+  const folder = folderBaseName(folderPath) ?? "selected folder";
+  el.confirmSummary().textContent =
+    `Convert ${n} file${n === 1 ? "" : "s"} from “${folder}”. Confirm options, then start.`;
+  el.confirmDelete().checked = el.optDelete().checked;
+  el.confirmDest().checked = el.optDest().checked;
+  confirmDestPath = el.optDest().checked ? destPath : null;
+  syncConfirmDestUi();
+  el.confirmBackdrop().hidden = false;
+  el.confirmOk().focus();
+}
+
+function closeConfirmDialog() {
+  el.confirmBackdrop().hidden = true;
 }
 
 async function ensureRange(start: number, end: number) {
@@ -260,8 +357,22 @@ async function pickDest() {
   const path = await pickDirectory();
   if (!path) return;
   destPath = path;
-  el.destLabel().textContent = path;
-  el.destLabel().title = path;
+  el.optDest().checked = true;
+  el.destBtn().disabled = false;
+  syncToolbarDestLabel();
+}
+
+async function pickConfirmDest() {
+  const path = await pickDirectory();
+  if (!path) return;
+  confirmDestPath = path;
+  el.confirmDest().checked = true;
+  syncConfirmDestUi();
+}
+
+function clearConfirmDest() {
+  confirmDestPath = null;
+  syncConfirmDestUi();
 }
 
 async function selectAllVisible(checked: boolean) {
@@ -280,22 +391,64 @@ async function selectAllVisible(checked: boolean) {
   await renderVisible();
 }
 
-async function startConvert() {
+async function startConvert(opts?: {
+  deleteOriginals: boolean;
+  useDest: boolean;
+  destDir: string | null;
+  skipConfirm?: boolean;
+}) {
   if (selected.size === 0) return;
-  const useDest = el.optDest().checked;
+
+  if (!opts?.skipConfirm) {
+    openConfirmDialog();
+    return;
+  }
+
+  const deleteOriginals = opts.deleteOriginals;
+  const useDest = opts.useDest;
+  const destDir = useDest ? opts.destDir : null;
+  if (useDest && !destDir) {
+    alert("Pick a destination folder, or turn off custom destination.");
+    return;
+  }
+
+  // Keep toolbar options in sync with what was confirmed.
+  el.optDelete().checked = deleteOriginals;
+  el.optDest().checked = useDest;
+  el.destBtn().disabled = !useDest;
+  destPath = useDest ? destDir : null;
+  syncToolbarDestLabel();
+
   const paths = Array.from(selected);
+  const jobName = makeJobName(paths.length);
   const job = await invoke<JobSummary>("create_convert_job", {
     paths,
-    destDir: useDest ? destPath : null,
-    deleteOriginals: el.optDelete().checked,
+    destDir,
+    deleteOriginals,
   });
   currentJobId = job.id;
-  el.jobId().textContent = job.id.slice(0, 8);
+  setJobLabel(jobName, job.id);
   setProgress(0, 0, job.total, "running");
   el.convert().disabled = true;
   el.cancel().disabled = false;
-  logLine(`Job ${job.id.slice(0, 8)} started (${job.total} files).`);
+  logLine(`${jobName} started (${job.total} files).`);
   await invoke("start_convert_job", { jobId: job.id });
+}
+
+async function confirmAndStart() {
+  const useDest = el.confirmDest().checked;
+  const destDir = useDest ? confirmDestPath : null;
+  if (useDest && !destDir) {
+    alert("Pick a destination folder, or turn off custom destination.");
+    return;
+  }
+  closeConfirmDialog();
+  await startConvert({
+    deleteOriginals: el.confirmDelete().checked,
+    useDest,
+    destDir,
+    skipConfirm: true,
+  });
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
@@ -309,8 +462,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     el.destBtn().disabled = !el.optDest().checked;
     if (!el.optDest().checked) {
       destPath = null;
-      el.destLabel().textContent = "Default: JPG beside each HEIC";
     }
+    syncToolbarDestLabel();
   });
   el.selectAll().addEventListener("change", () => {
     void selectAllVisible(el.selectAll().checked).catch(showErr);
@@ -322,6 +475,27 @@ window.addEventListener("DOMContentLoaded", async () => {
     void renderVisible();
   });
 
+  el.confirmCancel().addEventListener("click", () => closeConfirmDialog());
+  el.confirmOk().addEventListener("click", () => {
+    void confirmAndStart().catch(showErr);
+  });
+  el.confirmDest().addEventListener("change", () => {
+    if (!el.confirmDest().checked) confirmDestPath = null;
+    syncConfirmDestUi();
+  });
+  el.confirmDestPick().addEventListener("click", () => {
+    void pickConfirmDest().catch(showErr);
+  });
+  el.confirmDestClear().addEventListener("click", () => clearConfirmDest());
+  el.confirmBackdrop().addEventListener("click", (ev) => {
+    if (ev.target === el.confirmBackdrop()) closeConfirmDialog();
+  });
+  window.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && !el.confirmBackdrop().hidden) {
+      closeConfirmDialog();
+    }
+  });
+
   await listen<JobProgressEvent>("job-progress", (event) => {
     const p = event.payload;
     if (currentJobId && p.job_id !== currentJobId) return;
@@ -329,7 +503,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (p.status === "job_finished") {
       el.cancel().disabled = true;
       updateSelectionUi();
-      logLine(`Job finished: ${p.job_status}`);
+      const label = currentJobName ?? "Job";
+      logLine(`${label} finished: ${p.job_status} (${p.done + p.failed}/${p.total})`);
       return;
     }
     if (p.status === "failed") {
@@ -385,7 +560,13 @@ window.addEventListener("DOMContentLoaded", async () => {
       const flag = await invoke<string>("auto_convert_flag");
       if (flag.trim() === "1") {
         await selectAllVisible(true);
-        await startConvert();
+        // Headless/smoke path: skip the modal and use toolbar options.
+        await startConvert({
+          deleteOriginals: el.optDelete().checked,
+          useDest: el.optDest().checked,
+          destDir: el.optDest().checked ? destPath : null,
+          skipConfirm: true,
+        });
       }
     }
   } catch (err) {

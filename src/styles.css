@@ -199,6 +199,14 @@ button:disabled {
 
 .job-status {
   color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.job-id-secondary {
+  color: var(--muted);
+  font-size: 11px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  opacity: 0.7;
 }
 
 .job-log {
@@ -215,4 +223,65 @@ button:disabled {
   display: flex;
   gap: 8px;
   align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(28, 26, 22, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 40;
+}
+
+.modal-backdrop[hidden] {
+  display: none;
+}
+
+.modal {
+  width: min(480px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 18px 40px rgba(28, 26, 22, 0.18);
+}
+
+.modal h2 {
+  margin: 0;
+  font-size: 18px;
+  font-family: "IBM Plex Serif", "Iowan Old Style", Georgia, serif;
+}
+
+.modal-summary {
+  margin: 0;
+  color: var(--muted);
+}
+
+.modal-dest-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.btn-primary,
+#confirm-ok {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
 }

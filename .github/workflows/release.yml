@@ -86,6 +86,8 @@ jobs:
             **macOS:** download the `.dmg` for your CPU (Apple Silicon vs Intel). Conversion uses built-in Apple `sips` (ImageIO) — no Homebrew.
 
             **Drag-and-drop:** drop a HEIC onto the window; the app asks whether to open the parent folder for bulk select/convert.
+
+            **Convert confirm:** after Convert, re-confirm delete-originals and custom destination before the job starts.
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}

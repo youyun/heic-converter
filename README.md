@@ -6,7 +6,9 @@ Bulk **HEIC → JPG** desktop app for **macOS** and **Windows 10**, built with [
 
 - Pick a folder, or **drag-and-drop** a HEIC onto the window (offers to open the parent folder for multi-select / bulk convert)
 - Multi-select HEIC/HEIF files (virtualized list; pages load on scroll)
-- Convert with live progress; jobs persist in SQLite and resume after crash/quit (skips done, retries failed)
+- Convert with live progress (`x/y` + bar); jobs show a readable name (folder · time), UUID secondary
+- Confirm dialog before start: re-check delete-originals and custom destination (set/clear there)
+- Jobs persist in SQLite and resume after crash/quit (skips done, retries failed)
 - Optional destination folder (default: write JPG beside each HEIC)
 - Optional delete of the original HEIC **only after** a successful JPG write
 - Bounded worker pool (up to 4 threads); one image at a time per worker

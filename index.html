@@ -58,7 +58,8 @@
       <section class="status-panel">
         <div class="status-row">
           <strong>Job</strong>
-          <span id="job-id">—</span>
+          <span id="job-name">—</span>
+          <span id="job-id" class="job-id-secondary" hidden title=""></span>
         </div>
         <div class="progress-bar">
           <div id="progress-fill" class="progress-fill"></div>
@@ -66,6 +67,43 @@
         <div id="job-status" class="job-status">Idle</div>
         <div id="job-log" class="job-log"></div>
       </section>
+    </div>
+
+    <div id="confirm-backdrop" class="modal-backdrop" hidden>
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-title"
+      >
+        <h2 id="confirm-title">Start conversion?</h2>
+        <p id="confirm-summary" class="modal-summary"></p>
+        <label class="check">
+          <input id="confirm-delete" type="checkbox" />
+          Delete original HEIC after successful convert
+        </label>
+        <label class="check">
+          <input id="confirm-dest" type="checkbox" />
+          Custom destination folder
+        </label>
+        <div class="modal-dest-row">
+          <button id="confirm-dest-pick" type="button" disabled>
+            Pick destination…
+          </button>
+          <button id="confirm-dest-clear" type="button" disabled>
+            Clear
+          </button>
+          <span id="confirm-dest-label" class="folder-label"
+            >Default: JPG beside each HEIC</span
+          >
+        </div>
+        <div class="modal-actions">
+          <button id="confirm-cancel" type="button">Cancel</button>
+          <button id="confirm-ok" type="button" class="btn-primary">
+            Convert
+          </button>
+        </div>
+      </div>
     </div>
   </body>
 </html>
