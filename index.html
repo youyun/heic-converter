@@ -11,42 +11,101 @@
     <div class="app">
       <header class="header">
         <div>
-          <h1>HEIC → JPG</h1>
-          <p class="sub">Bulk convert with resumable jobs — or drop a HEIC here</p>
+          <h1 data-i18n="app.heading">HEIC → JPG</h1>
+          <p class="sub" data-i18n="app.sub">
+            Bulk convert with resumable jobs — or drop a HEIC here
+          </p>
+          <p class="privacy" data-i18n="privacy.localOnly">
+            Files stay on this device — no upload.
+          </p>
         </div>
-        <div id="converter-info" class="meta"></div>
+        <div class="header-aside">
+          <div class="prefs" role="group" aria-label="Preferences">
+            <label class="pref">
+              <span class="pref-label" data-i18n="lang.label">Language</span>
+              <select id="locale-select" class="pref-select">
+                <option value="en">English</option>
+                <option value="zh">简体中文</option>
+              </select>
+            </label>
+            <label class="pref">
+              <span class="pref-label" data-i18n="theme.label">Theme</span>
+              <select id="theme-select" class="pref-select">
+                <option value="system" data-i18n="theme.system">System</option>
+                <option value="light" data-i18n="theme.light">Light</option>
+                <option value="dark" data-i18n="theme.dark">Dark</option>
+              </select>
+            </label>
+          </div>
+          <div id="converter-info" class="meta"></div>
+        </div>
       </header>
 
       <section class="toolbar">
-        <button id="btn-pick" type="button">Choose folder</button>
+        <button id="btn-pick" type="button" data-i18n="toolbar.chooseFolder">
+          Choose folder
+        </button>
         <label class="check">
           <input id="opt-recursive" type="checkbox" />
-          Include subfolders
+          <span data-i18n="toolbar.recursive">Include subfolders</span>
         </label>
-        <span id="folder-label" class="folder-label">No folder selected</span>
+        <span
+          id="folder-label"
+          class="folder-label"
+          data-i18n="toolbar.noFolder"
+          >No folder selected</span
+        >
       </section>
 
       <section class="options">
         <label class="check">
           <input id="opt-dest" type="checkbox" />
-          Custom destination folder
+          <span data-i18n="options.customDest">Custom destination folder</span>
         </label>
-        <button id="btn-dest" type="button" disabled>Pick destination…</button>
-        <span id="dest-label" class="folder-label">Default: JPG beside each HEIC</span>
+        <button
+          id="btn-dest"
+          type="button"
+          disabled
+          data-i18n="options.pickDest"
+        >
+          Pick destination…
+        </button>
+        <span
+          id="dest-label"
+          class="folder-label"
+          data-i18n="options.defaultDest"
+          >Default: JPG beside each HEIC</span
+        >
         <label class="check">
           <input id="opt-delete" type="checkbox" />
-          Delete original HEIC after successful convert
+          <span data-i18n="options.deleteOriginals"
+            >Delete original HEIC after successful convert</span
+          >
         </label>
       </section>
 
       <section class="list-header">
         <label class="check">
           <input id="select-all" type="checkbox" />
-          Select all (<span id="total-count">0</span>)
+          <span
+            ><span data-i18n="list.selectAll">Select all</span> (<span
+              id="total-count"
+              >0</span
+            >)</span
+          >
         </label>
         <span id="selected-count">0 selected</span>
-        <button id="btn-convert" type="button" disabled>Convert</button>
-        <button id="btn-cancel" type="button" disabled>Cancel</button>
+        <button
+          id="btn-convert"
+          type="button"
+          disabled
+          data-i18n="list.convert"
+        >
+          Convert
+        </button>
+        <button id="btn-cancel" type="button" disabled data-i18n="list.cancel">
+          Cancel
+        </button>
       </section>
 
       <div id="file-viewport" class="file-viewport" tabindex="0">
@@ -57,14 +116,14 @@
 
       <section class="status-panel">
         <div class="status-row">
-          <strong>Job</strong>
-          <span id="job-name">—</span>
+          <strong data-i18n="job.label">Job</strong>
+          <span id="job-name" data-i18n="job.emDash">—</span>
           <span id="job-id" class="job-id-secondary" hidden title=""></span>
         </div>
         <div class="progress-bar">
           <div id="progress-fill" class="progress-fill"></div>
         </div>
-        <div id="job-status" class="job-status">Idle</div>
+        <div id="job-status" class="job-status" data-i18n="job.idle">Idle</div>
         <div id="job-log" class="job-log"></div>
       </section>
     </div>
@@ -76,30 +135,52 @@
         aria-modal="true"
         aria-labelledby="confirm-title"
       >
-        <h2 id="confirm-title">Start conversion?</h2>
+        <h2 id="confirm-title" data-i18n="confirm.title">Start conversion?</h2>
         <p id="confirm-summary" class="modal-summary"></p>
         <label class="check">
           <input id="confirm-delete" type="checkbox" />
-          Delete original HEIC after successful convert
+          <span data-i18n="options.deleteOriginals"
+            >Delete original HEIC after successful convert</span
+          >
         </label>
         <label class="check">
           <input id="confirm-dest" type="checkbox" />
-          Custom destination folder
+          <span data-i18n="options.customDest">Custom destination folder</span>
         </label>
         <div class="modal-dest-row">
-          <button id="confirm-dest-pick" type="button" disabled>
+          <button
+            id="confirm-dest-pick"
+            type="button"
+            disabled
+            data-i18n="options.pickDest"
+          >
             Pick destination…
           </button>
-          <button id="confirm-dest-clear" type="button" disabled>
+          <button
+            id="confirm-dest-clear"
+            type="button"
+            disabled
+            data-i18n="confirm.clear"
+          >
             Clear
           </button>
-          <span id="confirm-dest-label" class="folder-label"
+          <span
+            id="confirm-dest-label"
+            class="folder-label"
+            data-i18n="options.defaultDest"
             >Default: JPG beside each HEIC</span
           >
         </div>
         <div class="modal-actions">
-          <button id="confirm-cancel" type="button">Cancel</button>
-          <button id="confirm-ok" type="button" class="btn-primary">
+          <button id="confirm-cancel" type="button" data-i18n="confirm.cancel">
+            Cancel
+          </button>
+          <button
+            id="confirm-ok"
+            type="button"
+            class="btn-primary"
+            data-i18n="confirm.convert"
+          >
             Convert
           </button>
         </div>

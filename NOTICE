@@ -1,0 +1,24 @@
+HEIC Converter
+Copyright (c) 2026 youyun
+
+This product is licensed under the MIT License (see LICENSE).
+
+Third-party components
+----------------------
+
+Windows release builds link the C libraries **libheif** and **libde265**
+(via vcpkg `libheif[hevc]`, used through the MIT-licensed Rust crates
+`libheif-rs` / `libheif-sys`). Those C libraries are licensed under the
+**GNU Lesser General Public License v3.0 (LGPL-3.0)**.
+
+- Source and build instructions for this app are published in this repository,
+  so you can rebuild against a modified libheif/libde265.
+- The app's own TypeScript and Rust source remains MIT.
+- macOS builds decode with Apple **sips** (ImageIO) at runtime and do not
+  ship libheif.
+
+Other Rust/npm dependencies used here are typically MIT and/or Apache-2.0.
+Consult each crate/package for its exact license. Dual-licensed crates that
+offer MIT or Apache-2.0 are used under those terms.
+
+No copyleft GPL (non-LGPL) dependency is required for the core converter.

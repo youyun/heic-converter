@@ -12,17 +12,17 @@ Installers are **not** committed to git. They are produced by GitHub Actions and
 From a clean `main`:
 
 ```sh
-git tag v0.1.1
-git push origin v0.1.1
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
-That triggers the Release workflow. When it finishes, open:
+That triggers the Release workflow. When it finishes, open the Releases page and download the installers.
 
-https://github.com/youyun/heic-converter/releases
+You can also run the workflow manually (**Actions → Release → Run workflow**) and pass a tag like `v0.2.0`.
 
-and download the Windows installer asset.
+## Upgrading
 
-You can also run the workflow manually (**Actions → Release → Run workflow**) and pass a tag like `v0.1.1`.
+Users should re-download the latest installer and run it again — it overwrites/upgrades the previous install (Windows MSI/NSIS and macOS `.app` replace). There is no in-app auto-update yet.
 
 ## Local packaging (optional)
 

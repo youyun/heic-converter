@@ -344,13 +344,18 @@ mod tests {
         assert_eq!(out2, PathBuf::from("/out/2026-11-08 09.15.22.jpg"));
     }
 
+    fn sample_heic(name: &str) -> Option<PathBuf> {
+        let root = std::env::var_os("HEIC_CONVERTER_SAMPLES")?;
+        let path = PathBuf::from(root).join(name);
+        path.exists().then_some(path)
+    }
+
     #[test]
     fn sample_heic_converts() {
-        let src = PathBuf::from("/Users/yuanda/Downloads/heic-samples/2026-11-08 09.15.22.heic");
-        if !src.exists() {
-            eprintln!("skip: sample HEIC missing");
+        let Some(src) = sample_heic("2026-11-08 09.15.22.heic") else {
+            eprintln!("skip: set HEIC_CONVERTER_SAMPLES (sample HEIC missing)");
             return;
-        }
+        };
         let dir = std::env::temp_dir().join("heic-converter-test");
         let _ = fs::create_dir_all(&dir);
         let dest = default_jpg_path(&src, Some(&dir));
@@ -368,11 +373,10 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn sample_heic_converts_via_sips_without_heif_dec() {
-        let src = PathBuf::from("/Users/yuanda/Downloads/heic-samples/2026-11-08 09.35.26.heic");
-        if !src.exists() {
-            eprintln!("skip: sample HEIC missing");
+        let Some(src) = sample_heic("2026-11-08 09.35.26.heic") else {
+            eprintln!("skip: set HEIC_CONVERTER_SAMPLES (sample HEIC missing)");
             return;
-        }
+        };
         // Prove macOS OOB path: Apple sips, no Homebrew heif-dec required.
         std::env::set_var("HEIC_CONVERTER_FORCE_SIPS", "1");
         let dir = std::env::temp_dir().join("heic-converter-test-sips");

@@ -10,11 +10,18 @@ mod tests {
     use std::thread;
     use std::time::{Duration, Instant};
 
+    fn samples_dir() -> Option<PathBuf> {
+        std::env::var_os("HEIC_CONVERTER_SAMPLES").map(PathBuf::from)
+    }
+
     #[test]
     fn bulk_samples_via_job_manager() {
-        let samples = PathBuf::from("/Users/yuanda/Downloads/heic-samples");
+        let Some(samples) = samples_dir() else {
+            eprintln!("skip: set HEIC_CONVERTER_SAMPLES to a folder of HEIC files");
+            return;
+        };
         if !samples.is_dir() {
-            eprintln!("skip: sample dir missing");
+            eprintln!("skip: sample dir missing ({})", samples.display());
             return;
         }
         let entries = scan_heic_files(&samples, false).expect("scan");

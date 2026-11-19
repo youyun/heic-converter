@@ -2,6 +2,21 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open } from "@tauri-apps/plugin-dialog";
+import {
+  applyStaticI18n,
+  detectInitialLocale,
+  getLocale,
+  setLocale,
+  t,
+  type Locale,
+} from "./i18n";
+import {
+  detectInitialTheme,
+  getThemePref,
+  initTheme,
+  setThemePref,
+  type ThemePref,
+} from "./theme";
 
 type HeicEntry = {
   path: string;
@@ -53,6 +68,12 @@ const selected = new Set<string>();
 let currentJobId: string | null = null;
 let currentJobName: string | null = null;
 let loadingPages = new Set<number>();
+let lastProgress: {
+  done: number;
+  failed: number;
+  total: number;
+  status: string;
+} | null = null;
 
 const el = {
   pick: () => document.getElementById("btn-pick") as HTMLButtonElement,
@@ -76,6 +97,10 @@ const el = {
   progress: () => document.getElementById("progress-fill") as HTMLElement,
   log: () => document.getElementById("job-log") as HTMLElement,
   info: () => document.getElementById("converter-info") as HTMLElement,
+  localeSelect: () =>
+    document.getElementById("locale-select") as HTMLSelectElement,
+  themeSelect: () =>
+    document.getElementById("theme-select") as HTMLSelectElement,
   confirmBackdrop: () =>
     document.getElementById("confirm-backdrop") as HTMLElement,
   confirmSummary: () =>
@@ -110,7 +135,8 @@ function folderBaseName(path: string | null): string | null {
 }
 
 function formatJobTime(d = new Date()): string {
-  return d.toLocaleString(undefined, {
+  const loc = getLocale() === "zh" ? "zh-CN" : undefined;
+  return d.toLocaleString(loc, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -122,30 +148,43 @@ function formatJobTime(d = new Date()): string {
 function makeJobName(fileCount: number): string {
   const folder = folderBaseName(folderPath);
   const when = formatJobTime();
-  if (folder) return `${folder} · ${when}`;
-  return `Convert ${fileCount} file${fileCount === 1 ? "" : "s"} · ${when}`;
+  if (folder) return t("job.nameFolder", { folder, when });
+  return t("job.nameFallback", { n: fileCount, when });
 }
 
 function logLine(msg: string) {
   const box = el.log();
-  const t = new Date().toLocaleTimeString();
-  box.textContent = `${t}  ${msg}\n` + (box.textContent ?? "");
+  const loc = getLocale() === "zh" ? "zh-CN" : undefined;
+  const time = new Date().toLocaleTimeString(loc);
+  box.textContent = `${time}  ${msg}\n` + (box.textContent ?? "");
 }
 
 function updateSelectionUi() {
-  el.selectedCount().textContent = `${selected.size} selected`;
+  el.selectedCount().textContent = t("list.selected", { n: selected.size });
   el.convert().disabled = selected.size === 0 || !folderPath;
   el.selectAll().checked = total > 0 && selected.size === total;
   el.selectAll().indeterminate = selected.size > 0 && selected.size < total;
 }
 
-function setProgress(done: number, failed: number, totalCount: number, status: string) {
+function setProgress(
+  done: number,
+  failed: number,
+  totalCount: number,
+  status: string,
+) {
+  lastProgress = { done, failed, total: totalCount, status };
   const finished = done + failed;
   const pct = totalCount > 0 ? Math.round((finished / totalCount) * 100) : 0;
   el.progress().style.width = `${pct}%`;
-  const failBit = failed > 0 ? ` · ${failed} failed` : "";
+  const failBit =
+    failed > 0 ? t("job.progressFailed", { n: failed }) : "";
   el.jobStatus().textContent =
-    `${status} — ${finished}/${totalCount} completed (${pct}%)${failBit}`;
+    t("job.progress", {
+      status,
+      finished,
+      total: totalCount,
+      pct,
+    }) + failBit;
 }
 
 function setJobLabel(name: string, id: string) {
@@ -161,7 +200,7 @@ function syncToolbarDestLabel() {
     el.destLabel().textContent = destPath;
     el.destLabel().title = destPath;
   } else {
-    el.destLabel().textContent = "Default: JPG beside each HEIC";
+    el.destLabel().textContent = t("options.defaultDest");
     el.destLabel().title = "";
   }
 }
@@ -174,19 +213,57 @@ function syncConfirmDestUi() {
     el.confirmDestLabel().textContent = confirmDestPath;
     el.confirmDestLabel().title = confirmDestPath;
   } else if (useDest) {
-    el.confirmDestLabel().textContent = "No destination selected yet";
+    el.confirmDestLabel().textContent = t("confirm.noDestYet");
     el.confirmDestLabel().title = "";
   } else {
-    el.confirmDestLabel().textContent = "Default: JPG beside each HEIC";
+    el.confirmDestLabel().textContent = t("options.defaultDest");
     el.confirmDestLabel().title = "";
+  }
+}
+
+function syncFolderLabel() {
+  if (folderPath) {
+    el.folderLabel().textContent = folderPath;
+    el.folderLabel().title = folderPath;
+  } else {
+    el.folderLabel().textContent = t("toolbar.noFolder");
+    el.folderLabel().title = "";
+  }
+}
+
+function refreshLocalizedChrome() {
+  applyStaticI18n();
+  el.localeSelect().value = getLocale();
+  el.themeSelect().value = getThemePref();
+  syncFolderLabel();
+  syncToolbarDestLabel();
+  if (!el.confirmBackdrop().hidden) {
+    const n = selected.size;
+    const folder =
+      folderBaseName(folderPath) ?? t("confirm.folderFallback");
+    el.confirmSummary().textContent = t("confirm.summary", { n, folder });
+    syncConfirmDestUi();
+  } else {
+    syncConfirmDestUi();
+  }
+  updateSelectionUi();
+  if (lastProgress) {
+    setProgress(
+      lastProgress.done,
+      lastProgress.failed,
+      lastProgress.total,
+      lastProgress.status,
+    );
+  } else if (!currentJobId) {
+    el.jobStatus().textContent = t("job.idle");
+    if (!currentJobName) el.jobName().textContent = t("job.emDash");
   }
 }
 
 function openConfirmDialog() {
   const n = selected.size;
-  const folder = folderBaseName(folderPath) ?? "selected folder";
-  el.confirmSummary().textContent =
-    `Convert ${n} file${n === 1 ? "" : "s"} from “${folder}”. Confirm options, then start.`;
+  const folder = folderBaseName(folderPath) ?? t("confirm.folderFallback");
+  el.confirmSummary().textContent = t("confirm.summary", { n, folder });
   el.confirmDelete().checked = el.optDelete().checked;
   el.confirmDest().checked = el.optDest().checked;
   confirmDestPath = el.optDest().checked ? destPath : null;
@@ -265,7 +342,7 @@ async function renderVisible() {
       cb.disabled = true;
       const name = document.createElement("div");
       name.className = "name";
-      name.textContent = "Loading…";
+      name.textContent = t("log.loading");
       row.append(cb, name, document.createElement("div"));
     }
     frag.appendChild(row);
@@ -277,10 +354,14 @@ async function loadFolder(path: string, preselect?: string[]) {
   folderPath = path;
   entries.clear();
   selected.clear();
-  el.folderLabel().textContent = path;
-  el.folderLabel().title = path;
+  syncFolderLabel();
   const recursive = el.recursive().checked;
-  logLine(`Scanning ${path}${recursive ? " (recursive)" : ""}…`);
+  logLine(
+    t("log.scanning", {
+      path,
+      recursive: recursive ? t("log.recursive") : "",
+    }),
+  );
   const scan = await invoke<FolderScan>("scan_folder", { path, recursive });
   total = scan.total;
   scan.entries.forEach((e, i) => entries.set(i, e));
@@ -293,7 +374,7 @@ async function loadFolder(path: string, preselect?: string[]) {
   el.totalCount().textContent = String(total);
   updateSelectionUi();
   await renderVisible();
-  logLine(`Found ${total} HEIC/HEIF file(s).`);
+  logLine(t("log.found", { n: total }));
 }
 
 function normalizePath(p: string): string {
@@ -322,14 +403,12 @@ async function handleDroppedPaths(paths: string[]) {
 
   const heics = paths.filter(isHeicPath);
   if (heics.length === 0) {
-    logLine("Drop a HEIC/HEIF photo (or a folder) to open it.");
+    logLine(t("drop.hint"));
     return;
   }
 
   const parent = parentDir(heics[0]);
-  const openFolder = window.confirm(
-    `Open the parent folder?\n\n${parent}\n\nOK — browse / multi-select / bulk convert from that folder.\nCancel — select only the dropped photo(s).`,
-  );
+  const openFolder = window.confirm(t("drop.offerFolder", { parent }));
 
   if (openFolder) {
     await loadFolder(parent);
@@ -344,7 +423,7 @@ async function pickDirectory(): Promise<string | null> {
   return await open({
     directory: true,
     multiple: false,
-    title: "Choose folder",
+    title: t("dialog.chooseFolder"),
   });
 }
 
@@ -408,7 +487,7 @@ async function startConvert(opts?: {
   const useDest = opts.useDest;
   const destDir = useDest ? opts.destDir : null;
   if (useDest && !destDir) {
-    alert("Pick a destination folder, or turn off custom destination.");
+    alert(t("alert.needDest"));
     return;
   }
 
@@ -431,7 +510,7 @@ async function startConvert(opts?: {
   setProgress(0, 0, job.total, "running");
   el.convert().disabled = true;
   el.cancel().disabled = false;
-  logLine(`${jobName} started (${job.total} files).`);
+  logLine(t("job.started", { name: jobName, n: job.total }));
   await invoke("start_convert_job", { jobId: job.id });
 }
 
@@ -439,7 +518,7 @@ async function confirmAndStart() {
   const useDest = el.confirmDest().checked;
   const destDir = useDest ? confirmDestPath : null;
   if (useDest && !destDir) {
-    alert("Pick a destination folder, or turn off custom destination.");
+    alert(t("alert.needDest"));
     return;
   }
   closeConfirmDialog();
@@ -452,11 +531,26 @@ async function confirmAndStart() {
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
+  setLocale(detectInitialLocale());
+  initTheme(detectInitialTheme());
+  refreshLocalizedChrome();
+
+  el.localeSelect().addEventListener("change", () => {
+    setLocale(el.localeSelect().value as Locale);
+    refreshLocalizedChrome();
+    void renderVisible();
+  });
+  el.themeSelect().addEventListener("change", () => {
+    setThemePref(el.themeSelect().value as ThemePref);
+  });
+
   el.pick().addEventListener("click", () => void pickFolder().catch(showErr));
   el.destBtn().addEventListener("click", () => void pickDest().catch(showErr));
   el.convert().addEventListener("click", () => void startConvert().catch(showErr));
   el.cancel().addEventListener("click", () => {
-    void invoke("cancel_convert_job").then(() => logLine("Cancel requested."));
+    void invoke("cancel_convert_job").then(() =>
+      logLine(t("job.cancelRequested")),
+    );
   });
   el.optDest().addEventListener("change", () => {
     el.destBtn().disabled = !el.optDest().checked;
@@ -503,16 +597,31 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (p.status === "job_finished") {
       el.cancel().disabled = true;
       updateSelectionUi();
-      const label = currentJobName ?? "Job";
-      logLine(`${label} finished: ${p.job_status} (${p.done + p.failed}/${p.total})`);
+      const label = currentJobName ?? t("job.label");
+      logLine(
+        t("job.finished", {
+          name: label,
+          status: p.job_status,
+          finished: p.done + p.failed,
+          total: p.total,
+        }),
+      );
       return;
     }
     if (p.status === "failed") {
-      logLine(`FAIL ${p.source_path}: ${p.error ?? ""}`);
+      logLine(
+        t("log.fail", { path: p.source_path, error: p.error ?? "" }),
+      );
     } else if (p.status === "done" && p.item_id >= 0) {
       // Keep log light — only every 10th success or first.
       if (p.done === 1 || p.done % 10 === 0) {
-        logLine(`OK (${p.done}/${p.total}) ${p.source_path}`);
+        logLine(
+          t("log.ok", {
+            done: p.done,
+            total: p.total,
+            path: p.source_path,
+          }),
+        );
       }
     }
   });
@@ -555,7 +664,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   try {
     const auto = await invoke<string | null>("auto_open_folder");
     if (auto) {
-      logLine(`Auto-opening ${auto}`);
+      logLine(t("log.autoOpen", { path: auto }));
       await loadFolder(auto);
       const flag = await invoke<string>("auto_convert_flag");
       if (flag.trim() === "1") {
@@ -576,6 +685,6 @@ window.addEventListener("DOMContentLoaded", async () => {
 
 function showErr(err: unknown) {
   const msg = err instanceof Error ? err.message : String(err);
-  logLine(`Error: ${msg}`);
+  logLine(t("log.error", { msg }));
   alert(msg);
 }
